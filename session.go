@@ -895,13 +895,9 @@ func copySession(session *Session, keepCreds bool) (s *Session) {
 }
 
 // CircuitBreaker function to enable cb.
-// can take int paramater to set custom timeout, default is 3000
-func (s *Session) CircuitBreaker(temp ...int) {
+// take int paramater to set custom timeout
+func (s *Session) CircuitBreaker(timeout int) {
 	s.dialInfo.EnableCB = true
-	timeout := 3000
-	if len(temp) > 0 {
-		timeout = temp[0]
-	}
 	hystrix.ConfigureCommand(s.dialInfo.Database, hystrix.CommandConfig{
 		Timeout:                timeout,
 		ErrorPercentThreshold:  10,
