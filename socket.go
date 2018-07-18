@@ -593,8 +593,6 @@ func (socket *mongoSocket) Query(ops ...interface{}) error {
 func (socket *mongoSocket) queryWithCB(ops ...interface{}) error {
 	var err error
 	for i := 0; i <= socket.dialInfo.MaxRetry; i++ {
-		sleep := socket.dialInfo.Intervaler.NextInterval()
-		time.Sleep(sleep)
 
 		cb, _, _ := hystrix.GetCircuit(socket.dialInfo.Database)
 		if cb.IsOpen() {
@@ -607,7 +605,9 @@ func (socket *mongoSocket) queryWithCB(ops ...interface{}) error {
 			return socket.queryOriginal(ops)
 		}, nil)
 
-		if err != nil {
+		if err != nil && i != socket.dialInfo.MaxRetry {
+			sleep := socket.dialInfo.Intervaler.NextInterval()
+			time.Sleep(sleep)
 			continue
 		}
 		break
