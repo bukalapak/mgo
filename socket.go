@@ -438,7 +438,7 @@ func (socket *mongoSocket) queryOriginal(ops ...interface{}) (err error) {
 	requests := make([]requestInfo, len(ops))
 	requestCount := 0
 
-	for i, op := range ops {
+	for _, op := range ops {
 		debugf("Socket %p to %s: serializing op: %#v", socket, socket.addr, op)
 		if qop, ok := op.(*queryOp); ok {
 			if cmd, ok := qop.query.(*findCmd); ok {
@@ -523,7 +523,6 @@ func (socket *mongoSocket) queryOriginal(ops ...interface{}) (err error) {
 			}
 
 		default:
-			fmt.Println(len(ops), i)
 			panic("internal error: unknown operation type")
 		}
 
@@ -583,18 +582,47 @@ func (socket *mongoSocket) queryOriginal(ops ...interface{}) (err error) {
 
 func (socket *mongoSocket) Query(ops ...interface{}) error {
 	var err error
+	if socket.dialInfo.EnableCB {
+		err = socket.queryWithCB(ops)
+	} else {
+		err = socket.queryWithRetry(ops)
+	}
+	return err
+}
+
+func (socket *mongoSocket) queryWithCB(ops ...interface{}) error {
+	var err error
 	for i := 0; i <= socket.dialInfo.MaxRetry; i++ {
-		if socket.dialInfo.EnableCB {
-			err = hystrix.Do("query", func() error {
-				return socket.queryOriginal(ops)
-			}, nil)
+		sleep := socket.dialInfo.Intervaler.NextInterval()
+		time.Sleep(sleep)
+
+		cb, _, _ := hystrix.GetCircuit(socket.dialInfo.Database)
+		if cb.IsOpen() {
+			counter.WithLabelValues("mongo-driver-"+socket.dialInfo.Database, "open").Inc()
 		} else {
-			err = socket.queryOriginal(ops)
+			counter.WithLabelValues("mongo-driver-"+socket.dialInfo.Database, "close").Inc()
 		}
 
+		err = hystrix.Do(socket.dialInfo.Database, func() error {
+			return socket.queryOriginal(ops)
+		}, nil)
+
 		if err != nil {
-			sleep := socket.dialInfo.Intervaler.NextInterval(i)
-			time.Sleep(sleep)
+			continue
+		}
+		break
+	}
+	return err
+}
+
+func (socket *mongoSocket) queryWithRetry(ops ...interface{}) error {
+	var err error
+	for i := 0; i <= socket.dialInfo.MaxRetry; i++ {
+		sleep := socket.dialInfo.Intervaler.NextInterval()
+		time.Sleep(sleep)
+		err = socket.queryOriginal(ops)
+
+		if err != nil {
 			continue
 		}
 

@@ -30,6 +30,12 @@
   version = "v1.1.0"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/indrasaputra/backoff"
+  packages = ["."]
+  revision = "224d642b953c25ada71fafeffd4f254c46c21fb6"
+
+[[projects]]
   name = "github.com/kr/pretty"
   packages = ["."]
   revision = "73f6ac0b30a98e433b289500d779f50c1a6f0712"
@@ -113,6 +119,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "0dad1d716082b963fc7d5b6b74b062ef4c3629f182a7db09c1b74aa959cc0e87"
+  inputs-digest = "ebfe159c032c4c1fb93a647dff9c5e6e1925aac2de792374341ab6a39769a98f"
   solver-name = "gps-cdcl"
   solver-version = 1

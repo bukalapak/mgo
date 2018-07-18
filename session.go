@@ -47,6 +47,7 @@ import (
 
 	"github.com/afex/hystrix-go/hystrix"
 	"github.com/bukalapak/mgo/bson"
+	"github.com/indrasaputra/backoff"
 )
 
 // Mode read preference mode. See Eventual, Monotonic and Strong for details
@@ -309,7 +310,10 @@ const (
 func Dial(url string) (*Session, error) {
 	session, err := DialWithTimeout(url, 10*time.Second)
 	if err == nil {
-		session.dialInfo.Intervaler = newConstantBackoff()
+		session.dialInfo.Intervaler = &backoff.ConstantBackoff{
+			BackoffInterval: 500 * time.Millisecond,
+			JitterInterval:  200 * time.Millisecond,
+		}
 		session.SetSyncTimeout(1 * time.Minute)
 		session.SetSocketTimeout(1 * time.Minute)
 	}
@@ -606,7 +610,7 @@ type DialInfo struct {
 	MaxRetry int
 
 	// interval function for waiting to retry
-	Intervaler intervaler
+	Intervaler *backoff.ConstantBackoff
 }
 
 // Copy returns a deep-copy of i.
@@ -898,7 +902,7 @@ func (s *Session) CircuitBreaker(temp ...int) {
 	if len(temp) > 0 {
 		timeout = temp[0]
 	}
-	hystrix.ConfigureCommand("query", hystrix.CommandConfig{
+	hystrix.ConfigureCommand(s.dialInfo.Database, hystrix.CommandConfig{
 		Timeout:                timeout,
 		ErrorPercentThreshold:  10,
 		RequestVolumeThreshold: 1000,
