@@ -49,6 +49,7 @@ import (
 	"github.com/afex/hystrix-go/hystrix"
 	"github.com/bukalapak/mgo/bson"
 	"github.com/indrasaputra/backoff"
+	opentracing "github.com/opentracing/opentracing-go"
 )
 
 // Mode read preference mode. See Eventual, Monotonic and Strong for details
