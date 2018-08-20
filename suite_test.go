@@ -87,6 +87,7 @@ func (s *S) SetUpSuite(c *C) {
 	s.StartAll()
 
 	session, err := mgo.Dial("localhost:40001")
+	session.CircuitBreaker(3000)
 	c.Assert(err, IsNil)
 	s.build, err = session.BuildInfo()
 	c.Check(err, IsNil)

@@ -27,6 +27,7 @@
 package mgo
 
 import (
+	"context"
 	"crypto/md5"
 	"crypto/tls"
 	"crypto/x509"
@@ -626,6 +627,9 @@ type DialInfo struct {
 
 	// interval function for waiting to retry
 	Intervaler *backoff.ConstantBackoff
+
+	// context
+	ctx context.Context
 }
 
 // Copy returns a deep-copy of i.
@@ -642,6 +646,10 @@ func (i *DialInfo) Copy() *DialInfo {
 	i.Intervaler = &backoff.ConstantBackoff{
 		BackoffInterval: 500 * time.Millisecond,
 		JitterInterval:  200 * time.Millisecond,
+	}
+
+	if i.ctx == nil {
+		context.Background()
 	}
 
 	info := &DialInfo{
@@ -669,6 +677,7 @@ func (i *DialInfo) Copy() *DialInfo {
 		EnableCB:       i.EnableCB,
 		MaxRetry:       i.MaxRetry,
 		Intervaler:     i.Intervaler,
+		ctx:            i.ctx,
 	}
 
 	info.Addrs = make([]string, len(i.Addrs))
@@ -5346,8 +5355,20 @@ func (r *writeCmdResult) BulkErrorCases() []BulkErrorCase {
 // will also be returned as err.
 func (c *Collection) writeOp(op interface{}, ordered bool) (lerr *LastError, err error) {
 	s := c.Database.Session
+	start := time.Now()
+	span, ctx := opentracing.StartSpanFromContext(s.dialInfo.ctx, "mgo_query")
+	defer span.Finish()
+	span = span.SetTag("db.type", "mongodb")
+	span = span.SetTag("db.kind", "query")
+	s.dialInfo.ctx = ctx
 	socket, err := s.acquireSocket(c.Database.Name == "local")
 	if err != nil {
+		span.LogEvent("error")
+		span.LogKV(
+			"event", "error",
+			"message", err.Error(),
+			"latency", time.Since(start).Seconds(),
+		)
 		return nil, err
 	}
 	defer socket.Release()
@@ -5374,6 +5395,12 @@ func (c *Collection) writeOp(op interface{}, ordered bool) (lerr *LastError, err
 				lerr.N += oplerr.N
 				lerr.modified += oplerr.modified
 				if err != nil {
+					span.LogEvent("error")
+					span.LogKV(
+						"event", "error",
+						"message", err.Error(),
+						"latency", time.Since(start).Seconds(),
+					)
 					for ei := range oplerr.ecases {
 						oplerr.ecases[ei].Index += i
 					}
@@ -5384,6 +5411,12 @@ func (c *Collection) writeOp(op interface{}, ordered bool) (lerr *LastError, err
 				}
 			}
 			if len(lerr.ecases) != 0 {
+				span.LogEvent("error")
+				span.LogKV(
+					"event", "error",
+					"message", lerr.ecases[0].Err.Error(),
+					"latency", time.Since(start).Seconds(),
+				)
 				return &lerr, lerr.ecases[0].Err
 			}
 			return &lerr, nil
@@ -5410,6 +5443,12 @@ func (c *Collection) writeOp(op interface{}, ordered bool) (lerr *LastError, err
 				}
 			}
 			if len(lerr.ecases) != 0 {
+				span.LogEvent("error")
+				span.LogKV(
+					"event", "error",
+					"message", lerr.ecases[0].Err.Error(),
+					"latency", time.Since(start).Seconds(),
+				)
 				return &lerr, lerr.ecases[0].Err
 			}
 			return &lerr, nil
@@ -5436,6 +5475,12 @@ func (c *Collection) writeOp(op interface{}, ordered bool) (lerr *LastError, err
 				}
 			}
 			if len(lerr.ecases) != 0 {
+				span.LogEvent("error")
+				span.LogKV(
+					"event", "error",
+					"message", lerr.ecases[0].Err.Error(),
+					"latency", time.Since(start).Seconds(),
+				)
 				return &lerr, lerr.ecases[0].Err
 			}
 			return &lerr, nil
@@ -5455,6 +5500,12 @@ func (c *Collection) writeOp(op interface{}, ordered bool) (lerr *LastError, err
 			}
 		}
 		if len(lerr.ecases) != 0 {
+			span.LogEvent("error")
+			span.LogKV(
+				"event", "error",
+				"message", lerr.ecases[0].Err.Error(),
+				"latency", time.Since(start).Seconds(),
+			)
 			return &lerr, lerr.ecases[0].Err
 		}
 		return &lerr, nil
@@ -5472,6 +5523,12 @@ func (c *Collection) writeOp(op interface{}, ordered bool) (lerr *LastError, err
 			}
 		}
 		if len(lerr.ecases) != 0 {
+			span.LogEvent("error")
+			span.LogKV(
+				"event", "error",
+				"message", lerr.ecases[0].Err.Error(),
+				"latency", time.Since(start).Seconds(),
+			)
 			return &lerr, lerr.ecases[0].Err
 		}
 		return &lerr, nil
