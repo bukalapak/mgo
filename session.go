@@ -5361,15 +5361,11 @@ func (c *Collection) writeOp(op interface{}, ordered bool) (lerr *LastError, err
 	defer span.Finish()
 	span = span.SetTag("db.type", "mongodb")
 	span = span.SetTag("db.kind", "query")
+	span = span.SetTag("db.statement", reflect.TypeOf(op))
 	s.dialInfo.ctx = ctx
 	socket, err := s.acquireSocket(c.Database.Name == "local")
 	if err != nil {
-		span.LogEvent("error")
-		span.LogKV(
-			"event", "error",
-			"message", err.Error(),
-			"latency", time.Since(start).Seconds(),
-		)
+		reportSpan(span, time.Since(start).Seconds(), err)
 		return nil, err
 	}
 	defer socket.Release()
@@ -5396,12 +5392,7 @@ func (c *Collection) writeOp(op interface{}, ordered bool) (lerr *LastError, err
 				lerr.N += oplerr.N
 				lerr.modified += oplerr.modified
 				if err != nil {
-					span.LogEvent("error")
-					span.LogKV(
-						"event", "error",
-						"message", err.Error(),
-						"latency", time.Since(start).Seconds(),
-					)
+					reportSpan(span, time.Since(start).Seconds(), err)
 					for ei := range oplerr.ecases {
 						oplerr.ecases[ei].Index += i
 					}
@@ -5412,12 +5403,7 @@ func (c *Collection) writeOp(op interface{}, ordered bool) (lerr *LastError, err
 				}
 			}
 			if len(lerr.ecases) != 0 {
-				span.LogEvent("error")
-				span.LogKV(
-					"event", "error",
-					"message", lerr.ecases[0].Err.Error(),
-					"latency", time.Since(start).Seconds(),
-				)
+				reportSpan(span, time.Since(start).Seconds(), lerr.ecases[0].Err)
 				return &lerr, lerr.ecases[0].Err
 			}
 			return &lerr, nil
@@ -5444,12 +5430,7 @@ func (c *Collection) writeOp(op interface{}, ordered bool) (lerr *LastError, err
 				}
 			}
 			if len(lerr.ecases) != 0 {
-				span.LogEvent("error")
-				span.LogKV(
-					"event", "error",
-					"message", lerr.ecases[0].Err.Error(),
-					"latency", time.Since(start).Seconds(),
-				)
+				reportSpan(span, time.Since(start).Seconds(), lerr.ecases[0].Err)
 				return &lerr, lerr.ecases[0].Err
 			}
 			return &lerr, nil
@@ -5476,12 +5457,7 @@ func (c *Collection) writeOp(op interface{}, ordered bool) (lerr *LastError, err
 				}
 			}
 			if len(lerr.ecases) != 0 {
-				span.LogEvent("error")
-				span.LogKV(
-					"event", "error",
-					"message", lerr.ecases[0].Err.Error(),
-					"latency", time.Since(start).Seconds(),
-				)
+				reportSpan(span, time.Since(start).Seconds(), lerr.ecases[0].Err)
 				return &lerr, lerr.ecases[0].Err
 			}
 			return &lerr, nil
@@ -5501,12 +5477,7 @@ func (c *Collection) writeOp(op interface{}, ordered bool) (lerr *LastError, err
 			}
 		}
 		if len(lerr.ecases) != 0 {
-			span.LogEvent("error")
-			span.LogKV(
-				"event", "error",
-				"message", lerr.ecases[0].Err.Error(),
-				"latency", time.Since(start).Seconds(),
-			)
+			reportSpan(span, time.Since(start).Seconds(), lerr.ecases[0].Err)
 			return &lerr, lerr.ecases[0].Err
 		}
 		return &lerr, nil
@@ -5524,17 +5495,21 @@ func (c *Collection) writeOp(op interface{}, ordered bool) (lerr *LastError, err
 			}
 		}
 		if len(lerr.ecases) != 0 {
-			span.LogEvent("error")
-			span.LogKV(
-				"event", "error",
-				"message", lerr.ecases[0].Err.Error(),
-				"latency", time.Since(start).Seconds(),
-			)
+			reportSpan(span, time.Since(start).Seconds(), lerr.ecases[0].Err)
 			return &lerr, lerr.ecases[0].Err
 		}
 		return &lerr, nil
 	}
 	return c.writeOpQuery(socket, safeOp, op, ordered)
+}
+
+func reportSpan(s opentracing.Span, t float64, err error) {
+	s.LogEvent("error")
+	s.LogKV(
+		"event", "error",
+		"message", err.Error(),
+		"latency", t,
+	)
 }
 
 func (c *Collection) writeOpQuery(socket *mongoSocket, safeOp *queryOp, op interface{}, ordered bool) (lerr *LastError, err error) {
