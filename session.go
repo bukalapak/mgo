@@ -2088,6 +2088,13 @@ func (s *Session) Copy() *Session {
 	return scopy
 }
 
+// CopyWithContext works just like Copy, but include context from user to the session
+func (s *Session) CopyWithContext(ctx context.Context) *Session {
+	scopy := s.Copy()
+	scopy.dialInfo.ctx = ctx
+	return scopy
+}
+
 // Clone works just like Copy, but also reuses the same socket as the original
 // session, in case it had already reserved one due to its consistency
 // guarantees.  This behavior ensures that writes performed in the old session
